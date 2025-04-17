@@ -1,0 +1,47 @@
+const rateLimitData = {};
+
+function rateLimiter(req, res, next) {
+  const ip = req.ip;
+  const currentTime = Date.now();
+  const oneMinute = 60 * 1000;
+
+  if (!rateLimitData[ip]) {
+    rateLimitData[ip] = {
+      count: 1,
+      startTime: currentTime,
+      blockUntil: null,
+      backoffTime: oneMinute // starting block duration (1 minute)
+    };
+    return next();
+  }
+
+  const userData = rateLimitData[ip];
+
+  // If currently blocked
+  if (userData.blockUntil && currentTime < userData.blockUntil) {
+    console.log("Blocked IP: " + ip + " at " + new Date());
+    return res.status(429).send("Too Many Requests. Try again later.");
+  }
+
+  // If a minute has passed, reset request count
+  if (currentTime - userData.startTime > oneMinute) {
+    userData.count = 1;
+    userData.startTime = currentTime;
+    return next();
+  }
+
+  userData.count++;
+
+  if (userData.count > 5) {
+    console.log("Blocked IP: " + ip + " at " + new Date());
+    // Set blockUntil using current backoffTime
+    userData.blockUntil = currentTime + userData.backoffTime;
+    // Double the backoffTime for next time
+    userData.backoffTime *= 2;
+    return res.status(429).send("Too Many Requests. You are temporarily blocked.");
+  } else {
+    next();
+  }
+}
+
+module.exports = rateLimiter;
